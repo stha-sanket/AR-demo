@@ -1,0 +1,12 @@
+AR Camera Calibration File
+
+# Camera parameters for a Logitech QuickCam Pro 4000
+# (obtained using GML Camera Calibration Toolbox)
+
+# Intrinsic parameters
+3
+640 480
+# fx, fy, cx, cy
+536.5225 536.5225 320.0 240.0
+# k1, k2, p1, p2
+0.165 0.0 0.0 0.0

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Marker-Based AR with Full Controls</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+    <style>
+      #mode-button {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        padding: 12px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font: 16px sans-serif;
+        text-align: center;
+        cursor: pointer;
+        z-index: 10;
+      }
+    </style>
+
+    <script>
+      AFRAME.registerComponent('manipulator', {
+        init: function () {
+          this.isDragging = false;
+          this.previousTouch = null;
+          this.initialPinchDistance = 0;
+          this.rotateMode = false; // Start in Move Mode
+          this.previousAngle = 0; // For two-finger rotation
+
+          this.el.sceneEl.addEventListener('markerFound', () => {
+            const canvas = this.el.sceneEl.canvas;
+            const modeButton = document.getElementById('mode-button');
+
+            // Toggle between Move and Rotate mode
+            modeButton.style.display = 'block';
+            modeButton.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.rotateMode = !this.rotateMode;
+              modeButton.textContent = this.rotateMode ? 'Switch to Move Mode' : 'Switch to Rotate Mode';
+            });
+
+            // Touch Start
+            canvas.addEventListener('touchstart', (e) => {
+              this.isDragging = true;
+              this.previousTouch = this.copyTouches(e.touches);
+              if (e.touches.length === 2) {
+                this.initialPinchDistance = this.getTouchDistance(e.touches);
+                this.previousAngle = this.getTouchAngle(e.touches);
+              }
+            });
+
+            // Touch End
+            canvas.addEventListener('touchend', () => {
+              this.isDragging = false;
+              this.previousTouch = null;
+            });
+
+            // Touch Move
+            canvas.addEventListener('touchmove', (e) => {
+              if (!this.isDragging) return;
+
+              const touches = e.touches;
+              const robot = this.el;
+
+              // One-finger drag: Move or Rotate based on mode
+              if (touches.length === 1 && this.previousTouch.length === 1) {
+                const dx = touches[0].clientX - this.previousTouch[0].clientX;
+                const dy = touches[0].clientY - this.previousTouch[0].clientY;
+
+                if (this.rotateMode) {
+                  // --- ROTATE MODE ---
+                  let rotation = robot.getAttribute('rotation');
+                  rotation.y += dx * 0.5; // Yaw (left/right)
+                  rotation.x += dy * 0.5; // Pitch (up/down)
+                  robot.setAttribute('rotation', rotation);
+                } else {
+                  // --- MOVE MODE ---
+                  let position = robot.getAttribute('position');
+                  position.x += dx * 0.005;
+                  position.z += dy * 0.005;
+                  robot.setAttribute('position', position);
+                }
+              }
+              // Two-finger pinch: Scale, Lift & Rotate
+              else if (touches.length === 2 && this.previousTouch.length === 2) {
+                const currentPinchDistance = this.getTouchDistance(touches);
+                const avgY = (touches[0].clientY + touches[1].clientY) / 2;
+                const prevAvgY = (this.previousTouch[0].clientY + this.previousTouch[1].clientY) / 2;
+
+                // Scale
+                const scaleFactor = currentPinchDistance / this.initialPinchDistance;
+                robot.object3D.scale.set(scaleFactor * 0.2, scaleFactor * 0.2, scaleFactor * 0.2);
+
+                // Lift (Y-axis)
+                const dy = avgY - prevAvgY;
+                let position = robot.getAttribute('position');
+                position.y -= dy * 0.005;
+                robot.setAttribute('position', position);
+
+                // Rotate (Y-axis)
+                const currentAngle = this.getTouchAngle(touches);
+                const angleDelta = currentAngle - this.previousAngle;
+                let rotation = robot.getAttribute('rotation');
+                rotation.y += angleDelta * (180 / Math.PI) * 0.5;
+                robot.setAttribute('rotation', rotation);
+                this.previousAngle = currentAngle;
+              }
+
+              this.previousTouch = this.copyTouches(touches);
+            });
+          });
+
+          this.el.sceneEl.addEventListener('markerLost', () => {
+            document.getElementById('mode-button').style.display = 'none';
+          });
+        },
+
+        getTouchDistance: function (touches) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        },
+
+        getTouchAngle: function (touches) {
+          return Math.atan2(
+            touches[1].clientY - touches[0].clientY,
+            touches[1].clientX - touches[0].clientX
+          );
+        },
+
+        copyTouches: function (touches) {
+          let touchArray = [];
+          for (let i = 0; i < touches.length; i++) {
+            touchArray.push({ clientX: touches[i].clientX, clientY: touches[i].clientY });
+          }
+          return touchArray;
+        }
+      });
+    </script>
+
+  </head>
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+
+      <a-assets>
+        <a-asset-item id="robot-model" src="https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/RobotExpressive/RobotExpressive.glb"></a-asset-item>
+      </a-assets>
+
+      <a-marker preset="hiro">
+        <a-entity
+          gltf-model="#robot-model"
+          scale="0.2 0.2 0.2"
+          position="0 0 0"
+          rotation="-90 0 0"
+          manipulator
+        >
+        </a-entity>
+      </a-marker>
+
+      <a-entity camera></a-entity>
+
+    </a-scene>
+
+    <!-- This button will toggle between Move and Rotate modes -->
+    <div id="mode-button" style="display: none;">Switch to Rotate Mode</div>
+
+  </body>
+</html>
